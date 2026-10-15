@@ -21,6 +21,12 @@ swap, out-of-tree IPU7 driver or self-built camera HAL is needed.
   `linux-modules-ipu7-generic-hwe-26.04` (from the OEM/"Additional Drivers"
   selection `libcamhal-ipu7x`; `intel-ipu7-dkms` is *not* installed)
 - IPU7 firmware 1.1.9 as shipped
+- Install history: Ubuntu 24.04 with the OEM kernel `6.17.0-1033-oem`, then
+  upgraded to 26.04; the camera packages above came from the OEM driver
+  selection ("Additional Drivers"). Bug 1 is in the kernel module and does not
+  depend on how the system was installed. A fresh 26.04 install may not have
+  `libcamhal-ipu7x` and `v4l2-relayd`; select the IPU7 driver in "Additional
+  Drivers" (or install them with apt) before applying the fix for bug 2.
 
 Other kernels, models or sensors are untested. Run `scripts/check-ipu-bridge.py`
 first to see whether bug 1 applies to you.
@@ -81,6 +87,38 @@ The rebuilt module has the same vermagic and exported symbol CRCs as Ubuntu's,
 so the stock `intel_ipu7` loads it unchanged. It is installed to `updates/`,
 which `depmod` prefers over the distribution module. Nothing in `kernel/` is
 modified.
+
+#### Recommended: DKMS
+
+A module in `updates/` only applies to the kernel it was built for, so the
+camera breaks again on the next kernel update. With DKMS the module is
+rebuilt automatically whenever a new kernel is installed:
+
+```sh
+sudo apt install dkms linux-headers-$(uname -r) build-essential
+sudo scripts/install-dkms.sh
+sudo reboot
+```
+
+[`dkms/dkms.conf`](dkms/dkms.conf) limits the build to `7.0.x` kernels (the
+source is Linux v7.0; the 6.17 OEM kernel and later series are left alone).
+For each matching kernel, [`dkms/dkms-should-build.py`](dkms/dkms-should-build.py)
+inspects that kernel's distribution `ipu-bridge` and allows the build only if
+
+- it still lists a sensor twice, and
+- its table without the duplicate matches `ipu-bridge/ipu-bridge.c` exactly.
+
+If Ubuntu fixed the bug or changed the table, DKMS skips the module (status 77,
+"BUILD_EXCLUSIVE directive which does not match") and the distribution module
+is used. A skip never fails the kernel package installation. Check the state
+with `dkms status ipu-bridge-dedup`.
+
+`install-dkms.sh` removes a module installed earlier with
+`install-ipu-bridge.sh`. On Ubuntu, dkms signs modules with the MOK key in
+`/var/lib/shim-signed/mok/` and creates it if missing; with Secure Boot
+disabled the signature does not matter.
+
+#### Manual, single kernel
 
 ```sh
 sudo apt install linux-headers-$(uname -r) build-essential
@@ -194,7 +232,9 @@ gst-launch-1.0 v4l2src device=/dev/video0 num-buffers=60 ! videoconvert ! autovi
 ## Rollback
 
 ```sh
-# bug 1
+# bug 1, DKMS
+sudo scripts/uninstall-dkms.sh
+# bug 1, manual
 sudo rm /lib/modules/$(uname -r)/updates/ipu-bridge.ko
 sudo depmod -a && sudo update-initramfs -u
 # bug 2
@@ -207,12 +247,13 @@ sudo systemctl restart v4l2-relayd@default
 
 ## Maintenance
 
-- **New kernel:** the module in `updates/` only applies to the version it was
-  built for. On every kernel update, run `scripts/check-ipu-bridge.py` against
-  the new kernel's module. If it still reports the duplicate, rebuild and
-  install for that version (`build-ipu-bridge.sh <version>`,
-  `install-ipu-bridge.sh <version>`). If Ubuntu changed other parts of
-  `ipu-bridge.c`, compare before installing. A DKMS package is not provided.
+- **New kernel:** with DKMS nothing is needed for `7.0.x` kernels. Watch the
+  apt output for "Autoinstall on <version> was skipped for module(s) ipu-bridge-dedup":
+  either Ubuntu fixed the bug (camera works without this module) or the table
+  changed and `ipu-bridge/ipu-bridge.c` needs an update. A new kernel series
+  (7.1 and later) is never built and needs a new source. Without DKMS, rebuild
+  and install for each new version (`build-ipu-bridge.sh <version>`,
+  `install-ipu-bridge.sh <version>`).
 - **libcamhal update:** `/etc/camera/ipu7x-noshutter` is a copy and does not
   follow package updates. Recreate it after `libcamhal-ipu7x` changes.
 - **v4l2-relayd update:** the package may replace or ask about
@@ -224,6 +265,9 @@ sudo systemctl restart v4l2-relayd@default
 |---|---|
 | `ipu-bridge/ipu-bridge.c` | Fixed module source (GPL-2.0, from Linux v7.0) |
 | `ipu-bridge/ubuntu-7.0-sensor-table.patch` | Diff against upstream v7.0 |
+| `dkms/dkms.conf` | DKMS package `ipu-bridge-dedup`, 7.0.x only |
+| `dkms/dkms-should-build.py` | Per-kernel check: build only while the duplicate exists |
+| `scripts/install-dkms.sh`, `scripts/uninstall-dkms.sh` | Register/remove the DKMS package |
 | `scripts/build-ipu-bridge.sh` | Out-of-tree build against installed headers |
 | `scripts/install-ipu-bridge.sh` | Install to `updates/`, depmod, initramfs |
 | `scripts/check-ipu-bridge.py` | Decode a module's sensor table, report duplicates |
