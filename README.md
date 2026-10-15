@@ -5,6 +5,70 @@ IPU7, Sony IMX471 sensor) working on Ubuntu 26.04 with the stock
 `7.0.0-38-generic` kernel. Applications see it as `/dev/video0`
 ("Intel MIPI Camera") at 1920x1080, 30 fps.
 
+## Quick start
+
+You don't need to understand the details below to use this fix. If you have a
+ThinkPad X9-14 Gen 1 on Ubuntu 26.04 and the camera shows nothing or a black
+image, follow these steps. Every command goes into a terminal (Ctrl+Alt+T).
+Commands starting with `sudo` ask for your password.
+
+1. **Check your kernel.** Run `uname -r`. The output must start with `7.0.`.
+   If it doesn't, this fix does not apply to your system.
+
+2. **Install the camera driver from Ubuntu.** Open "Software & Updates" and go
+   to the "Additional Drivers" tab. Under "Intel Corporation: Lunar Lake IPU",
+   select **"Dynamic loading plugin for MIPI camera through Intel IPU7 LNL"**
+   (package `libcamhal-ipu7x`), click "Apply Changes" and restart the
+   computer. Do *not* pick the `intel-ipu7-dkms` entry. If the right entry is
+   already selected, skip this step.
+
+3. **Install the tools and download this repository:**
+
+   ```sh
+   sudo apt install git dkms build-essential linux-headers-$(uname -r)
+   git clone https://github.com/chrisOTM/thinkpad-x9-ipu7-camera-fix.git
+   cd thinkpad-x9-ipu7-camera-fix
+   ```
+
+4. **Check whether your system needs the fix:**
+
+   ```sh
+   scripts/check-ipu-bridge.py
+   ```
+
+   If the last line says `DUPLICATES: SONY471A`, continue. If it reports no
+   duplicates, Ubuntu has fixed the first bug and you can skip step 5.
+
+5. **Install the kernel fix.** It is rebuilt automatically for future kernel
+   updates:
+
+   ```sh
+   sudo scripts/install-dkms.sh
+   ```
+
+6. **Install the camera software fix:**
+
+   ```sh
+   sudo scripts/make-hal-config.py
+   sudo install -D -m 644 config/v4l2-relayd-camcfg.conf \
+       /etc/systemd/system/v4l2-relayd@default.service.d/camcfg.conf
+   sudo systemctl daemon-reload
+   ```
+
+7. **Restart the computer.**
+
+8. **Test the camera.** Make sure the LED on the camera key (F9) is **off**;
+   when it is on, the camera is switched off in hardware. Then open any camera
+   app or a video call in your browser and select "Intel MIPI Camera".
+
+**Still no image?** See [Verify](#verify), or open an issue with the output of
+`scripts/check-ipu-bridge.py` and `sudo dmesg | grep -iE 'ipu|imx471'`.
+**Want to undo everything?** See [Rollback](#rollback).
+**Better picture (1080p, no flicker):** see
+[Optional: 1080p and 50 Hz anti-banding](#optional-1080p-and-50-hz-anti-banding).
+
+## Details
+
 Two independent bugs break the camera. Fixing both is enough. No firmware
 swap, out-of-tree IPU7 driver or self-built camera HAL is needed.
 
