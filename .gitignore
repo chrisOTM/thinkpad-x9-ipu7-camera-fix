@@ -1,0 +1,13 @@
+# build output
+/build/
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+.module-common.o
+Module.symvers
+modules.order
+
+# local working notes (German, machine-specific)
+/CLAUDE.md

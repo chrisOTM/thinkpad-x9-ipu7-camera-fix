@@ -1,0 +1,27 @@
+--- a/drivers/media/pci/intel/ipu-bridge.c
++++ b/drivers/media/pci/intel/ipu-bridge.c
+@@ -62,6 +62,7 @@
+ 	/* Onsemi MT9M114 */
+ 	IPU_SENSOR_CONFIG("INT33F0", 1, 384000000),
+ 	/* Omnivision OV2740 */
++	IPU_SENSOR_CONFIG("INT346D", 1, 848000000),
+ 	IPU_SENSOR_CONFIG("INT3474", 1, 180000000),
+ 	/* Omnivision OV5670 */
+ 	IPU_SENSOR_CONFIG("INT3479", 1, 422400000),
+@@ -81,7 +82,7 @@
+ 	/* Omnivision OV02E10 */
+ 	IPU_SENSOR_CONFIG("OVTI02E1", 1, 360000000),
+ 	/* Omnivision ov05c10 */
+-	IPU_SENSOR_CONFIG("OVTI05C1", 1, 480000000),
++	IPU_SENSOR_CONFIG("OVTI05C1", 2, 480000000, 900000000),
+ 	/* Omnivision OV08A10 */
+ 	IPU_SENSOR_CONFIG("OVTI08A1", 1, 500000000),
+ 	/* Omnivision OV08x40 */
+@@ -97,6 +98,7 @@
+ 	IPU_SENSOR_CONFIG("SONY471A", 1, 200000000),
+ 	/* Toshiba T4KA3 */
+ 	IPU_SENSOR_CONFIG("XMCC0003", 1, 321468000),
++	IPU_SENSOR_CONFIG("TBE20A0", 1, 200000000),
+ };
+ 
+ /*
