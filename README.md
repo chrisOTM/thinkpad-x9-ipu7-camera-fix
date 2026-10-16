@@ -13,7 +13,8 @@ image, follow these steps. Every command goes into a terminal (Ctrl+Alt+T).
 Commands starting with `sudo` ask for your password.
 
 1. **Check your kernel.** Run `uname -r`. The output must start with `7.0.`.
-   If it doesn't, this fix does not apply to your system.
+   On `7.3.` (Ubuntu 26.10) see [Kernel 7.3 and Ubuntu 26.10](#kernel-73-and-ubuntu-2610).
+   For any other kernel this fix does not apply to your system.
 
 2. **Install the camera driver from Ubuntu.** Open "Software & Updates" and go
    to the "Additional Drivers" tab. Under "Intel Corporation: Lunar Lake IPU",
@@ -66,6 +67,39 @@ Commands starting with `sudo` ask for your password.
 **Want to undo everything?** See [Rollback](#rollback).
 **Better picture (1080p, no flicker):** see
 [Optional: 1080p and 50 Hz anti-banding](#optional-1080p-and-50-hz-anti-banding).
+
+## Kernel 7.3 and Ubuntu 26.10
+
+Ubuntu 26.10 ships kernel `7.3.0-9-generic`. Its packages were inspected
+(not yet tested on the hardware):
+
+- **Bug 1 is fixed.** The 7.3 `ipu-bridge` lists `SONY471A` once
+  (`scripts/check-ipu-bridge.py` reports no duplicates). The DKMS module is not
+  needed; `dkms.conf` skips 7.3 kernels on its own, so an installed DKMS
+  package does no harm. Remove it with `sudo scripts/uninstall-dkms.sh` once no
+  7.0 kernel is left.
+- **Bug 2 still applies.** It is in the camera HAL configuration, not in the
+  kernel. Keep `/etc/camera/ipu7x-noshutter` and the `v4l2-relayd` drop-in.
+- The IPU7 firmware is byte-identical to 26.04, the `intel-ipu7-psys` and
+  `imx471` modules are built from the same source as in 7.0.
+
+**Upgrading from 26.04 to 26.10:** `libcamhal-ipu7x`, `gstreamer1.0-icamera`
+and their `libia-*`/`libcamhal*` libraries come from Lenovo's OEM archive
+(`lenovo.archive.canonical.com`), which only serves LTS releases. The upgrade
+disables that source, and the packages then count as obsolete. When the
+upgrade asks to remove obsolete packages, answer **no**, or the camera stops
+working. All their dependencies exist in 26.10. To be safe, download them
+before upgrading:
+
+```sh
+mkdir -p ~/camera-debs && cd ~/camera-debs
+apt-get download $(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
+    'libcamhal*' 'libia-*' 'gstreamer1.0-icamera' 'libgsticamerainterface*' |
+    awk '$1 == "ii" {print $2}')
+```
+
+If `v4l2-relayd` asks about `/etc/v4l2-relayd.d/default.conf`, keep your
+version. After the upgrade, check the result as described in [Verify](#verify).
 
 ## Details
 
@@ -315,7 +349,9 @@ sudo systemctl restart v4l2-relayd@default
   apt output for "Autoinstall on <version> was skipped for module(s) ipu-bridge-dedup":
   either Ubuntu fixed the bug (camera works without this module) or the table
   changed and `ipu-bridge/ipu-bridge.c` needs an update. A new kernel series
-  (7.1 and later) is never built and needs a new source. Without DKMS, rebuild
+  (7.1 and later) is never built. 7.3 does not need the fix (see
+  [Kernel 7.3 and Ubuntu 26.10](#kernel-73-and-ubuntu-2610)); for other series
+  run `scripts/check-ipu-bridge.py` first. Without DKMS, rebuild
   and install for each new version (`build-ipu-bridge.sh <version>`,
   `install-ipu-bridge.sh <version>`).
 - **libcamhal update:** `/etc/camera/ipu7x-noshutter` is a copy and does not
