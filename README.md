@@ -5,6 +5,10 @@ IPU7, Sony IMX471 sensor) working on Ubuntu 26.04 with the stock
 `7.0.0-38-generic` kernel. Applications see it as `/dev/video0`
 ("Intel MIPI Camera") at 1920x1080, 30 fps.
 
+> **Update:** Ubuntu fixed the kernel bug (bug 1) in `7.0.0-39`. On `7.0.0-39`
+> and later only the camera software fix (bug 2) is needed; see
+> [Ubuntu's fix for bug 1](#ubuntus-fix-for-bug-1).
+
 ## Quick start
 
 You don't need to understand the details below to use this fix. If you have a
@@ -38,7 +42,8 @@ Commands starting with `sudo` ask for your password.
    ```
 
    If the last line says `DUPLICATES: SONY471A`, continue. If it reports no
-   duplicates, Ubuntu has fixed the first bug and you can skip step 5.
+   duplicates, Ubuntu has fixed the first bug and you can skip step 5. This is
+   the case for `7.0.0-39` and later.
 
 5. **Install the kernel fix.** It is rebuilt automatically for future kernel
    updates:
@@ -101,6 +106,22 @@ apt-get download $(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
 If `v4l2-relayd` asks about `/etc/v4l2-relayd.d/default.conf`, keep your
 version. After the upgrade, check the result as described in [Verify](#verify).
 
+## Ubuntu's fix for bug 1
+
+Ubuntu dropped the duplicate entry in kernel `7.0.0-39`
+("SAUCE: media: ipu-bridge: drop duplicate IMX471 sensor config",
+[LP: #2158540](https://bugs.launchpad.net/bugs/2158540)). Verified on
+`7.0.0-42-generic`: the stock module lists `SONY471A` once (27 entries,
+`scripts/check-ipu-bridge.py` reports no duplicates), the camera probes and
+`/dev/media0` appears without the DKMS module.
+
+- **Bug 2 still applies.** Keep `/etc/camera/ipu7x-noshutter` and the
+  `v4l2-relayd` drop-in.
+- **DKMS:** nothing to do. `dkms-should-build.py` sees no duplicate and skips
+  `7.0.0-39` and later, so the distribution module is used. Remove the package
+  with `sudo scripts/uninstall-dkms.sh` once no kernel older than `7.0.0-39`
+  is installed.
+
 ## Details
 
 Two independent bugs break the camera. Fixing both is enough. No firmware
@@ -108,13 +129,14 @@ swap, out-of-tree IPU7 driver or self-built camera HAL is needed.
 
 | | Symptom | Cause | Fix |
 |---|---|---|---|
-| 1 | No `/dev/media0`, call trace in `ipu7_pci_probe`, `imx471 ... failed to check hwcfg: -517` | Ubuntu's `ipu-bridge` lists `SONY471A` twice in its sensor table | Rebuilt `ipu-bridge` without the duplicate |
+| 1 | No `/dev/media0`, call trace in `ipu7_pci_probe`, `imx471 ... failed to check hwcfg: -517` | Ubuntu's `ipu-bridge` lists `SONY471A` twice in its sensor table (`7.0.0-38` and earlier) | Rebuilt `ipu-bridge` without the duplicate; fixed by Ubuntu in `7.0.0-39` |
 | 2 | `/dev/video0` exists but shows a black or green image | The privacy shutter switch reports "covered" while the camera is on, so libcamhal substitutes a dummy image | libcamhal config copy without the shutter check |
 
 ## Tested setup
 
 - ThinkPad X9-14 Gen 1 (machine type 21QA), BIOS N4DET41W (1.24)
-- Ubuntu 26.04, kernel `7.0.0-38-generic`
+- Ubuntu 26.04, kernel `7.0.0-38-generic` (both fixes) and `7.0.0-42-generic`
+  (only the fix for bug 2)
 - Ubuntu packages `libcamhal-ipu7x`, `gstreamer1.0-icamera`, `v4l2-relayd`,
   `linux-modules-ipu7-generic-hwe-26.04` (from the OEM/"Additional Drivers"
   selection `libcamhal-ipu7x`; `intel-ipu7-dkms` is *not* installed)
@@ -347,8 +369,9 @@ sudo systemctl restart v4l2-relayd@default
 
 - **New kernel:** with DKMS nothing is needed for `7.0.x` kernels. Watch the
   apt output for "Autoinstall on <version> was skipped for module(s) ipu-bridge-dedup":
-  either Ubuntu fixed the bug (camera works without this module) or the table
-  changed and `ipu-bridge/ipu-bridge.c` needs an update. A new kernel series
+  either Ubuntu fixed the bug (camera works without this module; expected from
+  `7.0.0-39` on) or the table changed and `ipu-bridge/ipu-bridge.c` needs an
+  update. A new kernel series
   (7.1 and later) is never built. 7.3 does not need the fix (see
   [Kernel 7.3 and Ubuntu 26.10](#kernel-73-and-ubuntu-2610)); for other series
   run `scripts/check-ipu-bridge.py` first. Without DKMS, rebuild
